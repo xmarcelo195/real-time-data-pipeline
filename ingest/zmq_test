@@ -1,0 +1,84 @@
+# # Testar depois
+# from bitcoinrpc.authproxy import AuthServiceProxy
+# from kafka import KafkaProducer
+# from decimal import Decimal
+# import json
+# import time
+# import os
+# import zmq
+# import threading
+
+# class CustomJSONEncoder(json.JSONEncoder):
+#     def default(self, obj):
+#         if isinstance(obj, Decimal):
+#             return float(obj)
+#         return super().default(obj)
+
+# # Configurações RPC Bitcoin Core
+# rpc_user = os.getenv('RPC_USER')
+# rpc_password = os.getenv('RPC_PASSWORD')
+# rpc_host = os.getenv('RPC_HOST', 'host.docker.internal')
+# rpc_port = os.getenv('RPC_PORT', '8332')
+
+# # Configuração Kafka
+# kafka_broker = os.getenv('KAFKA_BROKER', 'kafka:9092')
+
+# rpc_url = f"http://{rpc_user}:{rpc_password}@{rpc_host}:{rpc_port}"
+# rpc = AuthServiceProxy(rpc_url)
+
+# producer = KafkaProducer(
+#     bootstrap_servers=kafka_broker,
+#     value_serializer=lambda v: json.dumps(v, cls=CustomJSONEncoder).encode('utf-8'),
+# )
+
+# def get_latest_block_height():
+#     return rpc.getblockcount()
+
+# def ingest_new_blocks_polling():
+#     """Polling tradicional via RPC para novos blocos (fallback)."""
+#     last_height = 0
+#     while True:
+#         current_height = get_latest_block_height()
+#         print(f"[Polling] Altura atual: {current_height}")
+#         if current_height > last_height:
+#             for height in range(last_height + 1, current_height + 1):
+#                 block_hash = rpc.getblockhash(height)
+#                 block = rpc.getblock(block_hash, 2)
+#                 producer.send("btc", block)
+#                 print(f"[Polling] Enviado bloco {height} para Kafka")
+#                 last_height = height
+#         time.sleep(3)
+
+# def zmq_listener():
+#     """Listener ZeroMQ que consome novos blocos e envia para Kafka."""
+#     context = zmq.Context()
+#     socket = context.socket(zmq.SUB)
+#     socket.connect("tcp://127.0.0.1:28333")  # Porta do rawblock configurada no bitcoin.conf
+#     socket.setsockopt_string(zmq.SUBSCRIBE, '')  # Assina todas as mensagens
+
+#     print("[ZMQ] Iniciado listener ZeroMQ para novos blocos")
+
+#     while True:
+#         try:
+#             raw_block = socket.recv()
+#             # raw_block está em binário, converter para hex para armazenar JSON ou enviar direto?
+#             hex_block = raw_block.hex()
+
+#             # Opcional: Decodificar o bloco em JSON via RPC se quiser dados estruturados
+#             # Exemplo (desempenho mais lento):
+#             # block_json = rpc.getblock(rpc.getblockhash(altura), 2)
+
+#             # Enviar hex do bloco para Kafka
+#             producer.send("btc_zmq", {"raw_block_hex": hex_block})
+#             print("[ZMQ] Novo bloco enviado para Kafka")
+#         except Exception as e:
+#             print(f"[ZMQ] Erro no listener: {e}")
+#             time.sleep(1)
+
+# if __name__ == "__main__":
+#     # Rodar o listener ZMQ em thread separada para rodar simultaneamente com polling (opcional)
+#     zmq_thread = threading.Thread(target=zmq_listener, daemon=True)
+#     zmq_thread.start()
+
+#     # polling tradicional
+#     ingest_new_blocks_polling()
