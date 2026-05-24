@@ -21,6 +21,8 @@ services:
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_LOG_RETENTION_HOURS: 168
     networks:
       - kafka_network
 
@@ -54,6 +56,89 @@ services:
     networks:
       - kafka_network
 
+  flink-jobmanager:
+    image: flink:1.18.0-scala_2.12-java11
+    command: jobmanager
+    ports:
+      - "8081:8081"
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=flink-jobmanager
+      - FLINK_PROPERTIES=rest.bind-address= 0.0.0.0
+    networks:
+      - kafka_network
+    volumes:
+      - ./flink-job/flink-connector-kafka-3.0.2-1.18.jar:/opt/flink/lib/flink-connector-kafka-3.0.2-1.18.jar
+      - ./flink-job/kafka-clients-3.0.2.jar:/opt/flink/lib/kafka-clients-3.0.2.jar
+    mem_limit: 4g
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "8081"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  flink-taskmanager:
+    image: flink:1.18.0-scala_2.12-java11
+    command: taskmanager
+    depends_on:
+      flink-jobmanager:
+        condition: service_healthy
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=flink-jobmanager
+      - TASK_MANAGER_NUMBER_OF_TASK_SLOTS=4
+    networks:
+      - kafka_network
+    volumes:
+      - ./flink-job/flink-connector-kafka-3.0.2-1.18.jar:/opt/flink/lib/flink-connector-kafka-3.0.2-1.18.jar
+      - ./flink-job/kafka-clients-3.0.2.jar:/opt/flink/lib/kafka-clients-3.0.2.jar
+    mem_limit: 2g
+
+  flink-job:
+    build: ./flink-job
+    depends_on:
+      flink-jobmanager:
+        condition: service_healthy
+      flink-taskmanager:
+        condition: service_started
+      kafka:
+        condition: service_started
+    command: /opt/flink/run.sh
+    environment:
+      - FLINK_ENV_JAVA_OPTS=-Dlog4j2.formatMsgNoLookups=true
+    networks:
+      - kafka_network
+    mem_limit: 1g
+
+  druid:
+    image: apache/druid:33.0.0
+    ports:
+      - "8888:8888"
+    depends_on:
+      - zookeeper
+      - kafka
+    environment:
+      - druid_extensions_loadList=["druid-kafka-indexing-service"]
+      - druid_zk_service_host=zookeeper
+      - druid_metadata_storage_type=derby
+      - druid_metadata_storage_connector_connectURI=jdbc:derby://localhost:1527/var/druid/data/derby.db;create=true
+      - druid_metadata_storage_connector_user=druid
+      - druid_metadata_storage_connector_password=druid
+    volumes:
+      - druid_data:/opt/druid/var
+    networks:
+      - kafka_network
+
+  superset:
+    image: apache/superset:latest
+    ports:
+      - "8088:8088"
+    depends_on:
+      - druid
+    networks:
+      - kafka_network
+
 networks:
   kafka_network:
     driver: bridge
+
+volumes:
+  druid_data:
