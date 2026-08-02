@@ -1,0 +1,192 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "panels": [
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "format": 1,
+          "query": "SELECT count() / 60.0 AS tps FROM btc_analytics.transactions WHERE timestamp_ms >= (toUnixTimestamp64Milli(now64()) - 60000)",
+          "refId": "A"
+        }
+      ],
+      "title": "TPS (Last 60s)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "format": 1,
+          "query": "SELECT count() AS alerts_last_hour FROM btc_analytics.alerts WHERE timestamp_ms >= (toUnixTimestamp64Milli(now64()) - 3600000)",
+          "refId": "A"
+        }
+      ],
+      "title": "Alerts (Last Hour)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 3,
+      "targets": [
+        {
+          "format": 1,
+          "query": "SELECT toStartOfMinute(fromUnixTimestamp64Milli(timestamp_ms)) AS minute, count() AS txs FROM btc_analytics.transactions WHERE timestamp_ms >= (toUnixTimestamp64Milli(now64()) - 3600000) GROUP BY minute ORDER BY minute",
+          "refId": "A"
+        }
+      ],
+      "title": "Transaction Volume",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 4,
+      "targets": [
+        {
+          "format": 1,
+          "query": "SELECT address, argMax(balance, timestamp_ms) AS balance FROM btc_analytics.balance_updates GROUP BY address ORDER BY balance DESC LIMIT 10",
+          "refId": "A"
+        }
+      ],
+      "title": "Top Addresses",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 5,
+      "targets": [
+        {
+          "format": 1,
+          "query": "SELECT floor(argMax(balance, timestamp_ms)) AS bucket, count() AS addresses FROM btc_analytics.balance_updates GROUP BY address HAVING bucket >= 0 ORDER BY bucket LIMIT 30",
+          "refId": "A"
+        }
+      ],
+      "title": "Balance Distribution",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "id": 6,
+      "targets": [
+        {
+          "format": 1,
+          "query": "SELECT toStartOfMinute(fromUnixTimestamp64Milli(timestamp_ms)) AS minute, alert_type, count() AS total FROM btc_analytics.alerts WHERE timestamp_ms >= (toUnixTimestamp64Milli(now64()) - 3600000) GROUP BY minute, alert_type ORDER BY minute",
+          "refId": "A"
+        }
+      ],
+      "title": "Alert Rates",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "15s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": [
+    "bitcoin",
+    "flink",
+    "streaming"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "title": "Bitcoin Streaming Overview",
+  "uid": "btc-streaming-overview",
+  "version": 1
+}
